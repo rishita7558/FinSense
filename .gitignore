@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database
+data/db/
+
+# Logs
+logs/
+
+# Audio uploads
+data/sample_audio/*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
