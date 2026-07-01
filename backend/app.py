@@ -193,7 +193,9 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
 
 @app.post("/upload_audio")
-async def upload_audio(file: UploadFile = File(...), language_hint: str | None = Form(None)):  # noqa: B008
+async def upload_audio(
+    file: UploadFile = File(...), language_hint: str | None = Form(None)
+):  # noqa: B008
 
     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
 
