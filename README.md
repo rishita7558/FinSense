@@ -22,7 +22,7 @@ flowchart LR
   A[Streamlit Dashboard] --> B[FastAPI Backend]
   B --> C[Capture Conversation]
   B --> D[Live Streaming]
-  C --> E[Groq API (Whisper-Large-V3)]
+  C --> E["Groq API (Whisper-Large-V3)"]
   D --> E
   E --> G[Batch NLP Services]
   E --> H[Incremental Realtime Orchestrator]
