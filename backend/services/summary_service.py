@@ -1,8 +1,15 @@
 import re
 
-
 _INTENT_RULES = {
-    "Investment Discussion": ["invest", "investment", "mutual fund", "sip", "stock", "portfolio", "etf"],
+    "Investment Discussion": [
+        "invest",
+        "investment",
+        "mutual fund",
+        "sip",
+        "stock",
+        "portfolio",
+        "etf",
+    ],
     "Savings Goal": ["save", "savings", "goal", "emergency fund", "deposit"],
     "Budget Planning": ["budget", "expense", "income", "salary", "spend", "monthly"],
     "Loan Discussion": ["loan", "emi", "interest rate", "refinance", "mortgage"],
@@ -18,7 +25,9 @@ _INTENT_RULES = {
 
 
 def _split_sentences(text):
-    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()
+    ]
     return sentences or [text.strip()]
 
 
@@ -60,9 +69,15 @@ def generate_summary(text):
     risks = []
     for sentence in sentences:
         sentence_lower = sentence.lower()
-        if any(keyword in sentence_lower for keyword in ["should", "plan", "start", "buy", "invest", "increase", "reduce"]):
+        if any(
+            keyword in sentence_lower
+            for keyword in ["should", "plan", "start", "buy", "invest", "increase", "reduce"]
+        ):
             decisions.append(sentence)
-        if any(keyword in sentence_lower for keyword in ["risk", "loss", "debt", "emi", "interest", "inflation", "uncertain"]):
+        if any(
+            keyword in sentence_lower
+            for keyword in ["risk", "loss", "debt", "emi", "interest", "inflation", "uncertain"]
+        ):
             risks.append(sentence)
 
     return {

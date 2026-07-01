@@ -1,13 +1,38 @@
 import re
 
-
 _POSITIVE = {
-    "confident", "comfortable", "good", "great", "positive", "excited", "optimistic",
-    "secure", "sure", "profit", "gain", "increase", "growth", "happy", "strong",
+    "confident",
+    "comfortable",
+    "good",
+    "great",
+    "positive",
+    "excited",
+    "optimistic",
+    "secure",
+    "sure",
+    "profit",
+    "gain",
+    "increase",
+    "growth",
+    "happy",
+    "strong",
 }
 _NEGATIVE = {
-    "worried", "concerned", "anxious", "fear", "risk", "loss", "debt", "stress",
-    "hesitant", "uncertain", "bad", "decline", "drop", "negative", "pressure",
+    "worried",
+    "concerned",
+    "anxious",
+    "fear",
+    "risk",
+    "loss",
+    "debt",
+    "stress",
+    "hesitant",
+    "uncertain",
+    "bad",
+    "decline",
+    "drop",
+    "negative",
+    "pressure",
 }
 
 

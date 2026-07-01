@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from backend.realtime.analysis import build_summary, detect_intent, estimate_risk, estimate_sentiment, extract_entities
+from backend.realtime.analysis import (
+    build_summary,
+    detect_intent,
+    estimate_risk,
+    estimate_sentiment,
+    extract_entities,
+)
 from backend.realtime.events import ConversationState, TranscriptSegment
 from backend.realtime.transcript_buffer import TranscriptBuffer
 
@@ -44,14 +50,22 @@ class RealtimeOrchestrator:
             state.current_topic = summary["topic"]
 
             extracted_entities = extract_entities(context_text)
-            entity_map = {entity["entity"]: entity for entity in extracted_entities if entity.get("entity")}
+            entity_map = {
+                entity["entity"]: entity for entity in extracted_entities if entity.get("entity")
+            }
             state.entities.update(entity_map)
 
             sentiment = estimate_sentiment(context_text)
             state.sentiment_timeline.append({"time": datetime.utcnow().isoformat(), **sentiment})
             state.risk_score = estimate_risk(extracted_entities, sentiment)["score"]
             state.rolling_summary = summary
-            state.intent_history.append({"time": datetime.utcnow().isoformat(), "intent": state.current_intent, "topic": state.current_topic})
+            state.intent_history.append(
+                {
+                    "time": datetime.utcnow().isoformat(),
+                    "intent": state.current_intent,
+                    "topic": state.current_topic,
+                }
+            )
             state.confidence_score = segment.confidence or 0.0
 
         state.updated_at = datetime.utcnow()

@@ -17,15 +17,23 @@ class TranscriptBuffer:
         self._segments[segment.segment_id] = segment
 
     def final_segments(self):
-        final_items = [self._segments[segment_id] for segment_id in self._ordered_ids if self._segments[segment_id].is_final]
+        final_items = [
+            self._segments[segment_id]
+            for segment_id in self._ordered_ids
+            if self._segments[segment_id].is_final
+        ]
         return sorted(final_items, key=lambda item: item.sequence)
 
     def final_text(self):
-        return " ".join(segment.text.strip() for segment in self.final_segments() if segment.text.strip()).strip()
+        return " ".join(
+            segment.text.strip() for segment in self.final_segments() if segment.text.strip()
+        ).strip()
 
     def rolling_context(self):
         final_items = self.final_segments()[-self.window_size :]
-        return " ".join(segment.text.strip() for segment in final_items if segment.text.strip()).strip()
+        return " ".join(
+            segment.text.strip() for segment in final_items if segment.text.strip()
+        ).strip()
 
     def latest_partial(self):
         for segment_id in reversed(self._ordered_ids):

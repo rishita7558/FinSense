@@ -1,0 +1,13 @@
+extend-exclude = ["*.ipynb"]
+
+[lint]
+ignore = [
+    "B008",    # FastAPI File(...) as default argument
+    "SIM105",  # try/except pass instead of suppress
+    "E402",    # Module import not at top of file
+    "B007",    # Unused loop control variable
+    "E722",    # Bare except
+    "SIM102",  # Nested if statements
+    "C408",    # dict() vs {}
+    "SIM115",  # unclosed file handle
+]

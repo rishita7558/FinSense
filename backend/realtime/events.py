@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -13,9 +13,9 @@ class TranscriptSegment:
     text: str
     is_final: bool = False
     confidence: float = 0.0
-    speaker: Optional[str] = None
-    start_ms: Optional[int] = None
-    end_ms: Optional[int] = None
+    speaker: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self):

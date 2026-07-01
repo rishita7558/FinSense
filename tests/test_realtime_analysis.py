@@ -1,4 +1,10 @@
-from backend.realtime.analysis import build_summary, detect_intent, estimate_risk, estimate_sentiment, extract_entities
+from backend.realtime.analysis import (
+    build_summary,
+    detect_intent,
+    estimate_risk,
+    estimate_sentiment,
+    extract_entities,
+)
 
 
 def test_detect_intent_prefers_investment_discussion():

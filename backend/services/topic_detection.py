@@ -1,12 +1,5 @@
-financial_keywords = [
-    "loan",
-    "sip",
-    "emi",
-    "investment",
-    "mutual fund",
-    "interest",
-    "insurance"
-]
+financial_keywords = ["loan", "sip", "emi", "investment", "mutual fund", "interest", "insurance"]
+
 
 def detect_topic(text):
 

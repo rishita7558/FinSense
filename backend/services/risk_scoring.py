@@ -25,7 +25,4 @@ def compute_risk_score(entities, sentiment):
     else:
         risk = "High Risk"
 
-    return {
-        "score": score,
-        "risk_level": risk
-    }
+    return {"score": score, "risk_level": risk}

@@ -2,16 +2,45 @@ from __future__ import annotations
 
 import re
 
-
 ENTITY_KEYWORDS = [
-    "stock", "stocks", "mutual fund", "mutual funds", "etf", "gold", "real estate",
-    "sip", "emi", "loan", "insurance", "tax", "budget", "expense", "income",
-    "salary", "dividend", "cryptocurrency", "interest rate", "inflation",
-    "portfolio", "asset allocation", "risk", "return", "investment", "invest",
+    "stock",
+    "stocks",
+    "mutual fund",
+    "mutual funds",
+    "etf",
+    "gold",
+    "real estate",
+    "sip",
+    "emi",
+    "loan",
+    "insurance",
+    "tax",
+    "budget",
+    "expense",
+    "income",
+    "salary",
+    "dividend",
+    "cryptocurrency",
+    "interest rate",
+    "inflation",
+    "portfolio",
+    "asset allocation",
+    "risk",
+    "return",
+    "investment",
+    "invest",
 ]
 
 INTENT_RULES = {
-    "Investment Discussion": ["invest", "investment", "sip", "mutual fund", "stock", "portfolio", "etf"],
+    "Investment Discussion": [
+        "invest",
+        "investment",
+        "sip",
+        "mutual fund",
+        "stock",
+        "portfolio",
+        "etf",
+    ],
     "Savings Goal": ["save", "savings", "emergency fund", "deposit"],
     "Budget Planning": ["budget", "expense", "income", "salary", "spend"],
     "Loan Discussion": ["loan", "emi", "interest rate", "refinance"],
@@ -35,7 +64,11 @@ def extract_entities(text: str):
             seen.add(keyword)
             detected.append({"entity": keyword})
 
-    amount_matches = re.findall(r"(?:₹|rs\.?|inr)?\s?\d+(?:\.\d+)?\s?(?:lakh|lakhs|crore|crores|k|m|thousand|hundred|%)?", text, flags=re.IGNORECASE)
+    amount_matches = re.findall(
+        r"(?:₹|rs\.?|inr)?\s?\d+(?:\.\d+)?\s?(?:lakh|lakhs|crore|crores|k|m|thousand|hundred|%)?",
+        text,
+        flags=re.IGNORECASE,
+    )
     for amount in amount_matches:
         detected.append({"entity": amount.strip().lower(), "amount": amount.strip()})
 
@@ -57,8 +90,30 @@ def detect_intent(text: str, previous_intent: str = "Financial Conversation"):
 
 
 def estimate_sentiment(text: str):
-    positive = {"confident", "comfortable", "good", "great", "optimistic", "secure", "happy", "strong", "profit", "gain"}
-    negative = {"worried", "concerned", "anxious", "fear", "risk", "loss", "stress", "hesitant", "uncertain", "debt"}
+    positive = {
+        "confident",
+        "comfortable",
+        "good",
+        "great",
+        "optimistic",
+        "secure",
+        "happy",
+        "strong",
+        "profit",
+        "gain",
+    }
+    negative = {
+        "worried",
+        "concerned",
+        "anxious",
+        "fear",
+        "risk",
+        "loss",
+        "stress",
+        "hesitant",
+        "uncertain",
+        "debt",
+    }
 
     words = re.findall(r"[a-zA-Z']+", text.lower())
     positive_hits = sum(1 for word in words if word in positive)
@@ -73,7 +128,12 @@ def estimate_sentiment(text: str):
     else:
         label = "NEUTRAL"
 
-    return {"label": label, "score": score, "positive_hits": positive_hits, "negative_hits": negative_hits}
+    return {
+        "label": label,
+        "score": score,
+        "positive_hits": positive_hits,
+        "negative_hits": negative_hits,
+    }
 
 
 def estimate_risk(entities, sentiment):
@@ -98,9 +158,25 @@ def estimate_risk(entities, sentiment):
 
 
 def build_summary(text: str, intent: str):
-    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
-    decisions = [sentence for sentence in sentences if any(keyword in sentence.lower() for keyword in ["should", "plan", "start", "increase", "reduce", "invest", "buy"])]
-    risks = [sentence for sentence in sentences if any(keyword in sentence.lower() for keyword in ["risk", "loss", "debt", "interest", "inflation", "uncertain"])]
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()
+    ]
+    decisions = [
+        sentence
+        for sentence in sentences
+        if any(
+            keyword in sentence.lower()
+            for keyword in ["should", "plan", "start", "increase", "reduce", "invest", "buy"]
+        )
+    ]
+    risks = [
+        sentence
+        for sentence in sentences
+        if any(
+            keyword in sentence.lower()
+            for keyword in ["risk", "loss", "debt", "interest", "inflation", "uncertain"]
+        )
+    ]
 
     topic_map = {
         "Investment Discussion": "Investments",

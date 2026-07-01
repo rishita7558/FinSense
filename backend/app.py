@@ -1,31 +1,32 @@
-from fastapi import FastAPI, UploadFile, File, Request, Form, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import shutil
 import os
+import shutil
 import tempfile
-from typing import Optional
+import contextlib
 from datetime import datetime
+
+from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from backend.services.speech_service import transcribe_audio
-from backend.services.live_speech_service import transcribe_audio as transcribe_live_audio
-from backend.services.emotion_detection import detect_emotion
-from backend.services.risk_scoring import compute_risk_score
-from backend.services.timeline_service import generate_timeline
-from backend.services.language_detection import detect_language
-from backend.services.entity_extraction import extract_financial_entities
-from backend.services.summary_service import generate_summary
-from backend.database.conversation_repo import (
-    save_conversation,
-    get_all_conversations,
-    update_conversation,
-    delete_conversation
-)
 from backend.config import CORS_ORIGINS, STREAMING_WINDOW_SIZE
+from backend.database.conversation_repo import (
+    delete_conversation,
+    get_all_conversations,
+    save_conversation,
+    update_conversation,
+)
 from backend.realtime.events import TranscriptSegment
 from backend.realtime.orchestrator import RealtimeOrchestrator
 from backend.realtime.state_store import ConversationStateStore
 from backend.realtime.ws_manager import WebSocketManager
+from backend.services.emotion_detection import detect_emotion
+from backend.services.entity_extraction import extract_financial_entities
+from backend.services.language_detection import detect_language
+from backend.services.live_speech_service import transcribe_audio as transcribe_live_audio
+from backend.services.risk_scoring import compute_risk_score
+from backend.services.speech_service import transcribe_audio
+from backend.services.summary_service import generate_summary
+from backend.services.timeline_service import generate_timeline
 
 app = FastAPI()
 
@@ -51,17 +52,23 @@ def health_check():
 
 
 class StreamSegmentPayload(BaseModel):
-    segment_id: Optional[str] = None
+    segment_id: str | None = None
     sequence: int
     text: str
     is_final: bool = False
     confidence: float = 0.0
-    speaker: Optional[str] = None
-    start_ms: Optional[int] = None
-    end_ms: Optional[int] = None
+    speaker: str | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
 
 
-def _transcribe_chunk_to_segment(audio_path: str, session_id: str, sequence: int, language_hint: Optional[str] = None, is_final: bool = True):
+def _transcribe_chunk_to_segment(
+    audio_path: str,
+    session_id: str,
+    sequence: int,
+    language_hint: str | None = None,
+    is_final: bool = True,
+):
     transcripts = transcribe_live_audio(audio_path, language_hint=language_hint)
     segment_text = transcripts.get("english_text") or transcripts.get("native_text") or ""
     return TranscriptSegment(
@@ -105,9 +112,9 @@ async def stream_segment(session_id: str, payload: StreamSegmentPayload):
 @app.post("/stream/audio/{session_id}")
 async def stream_audio_chunk(
     session_id: str,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     sequence: int = Form(...),
-    language_hint: Optional[str] = Form(None),
+    language_hint: str | None = Form(None),
     is_final: bool = Form(True),
 ):
     file_ext = os.path.splitext(file.filename or "chunk.webm")[1] or ".webm"
@@ -116,46 +123,56 @@ async def stream_audio_chunk(
         temp_path = temp_file.name
 
     try:
-        segment = _transcribe_chunk_to_segment(temp_path, session_id, sequence, language_hint=language_hint, is_final=is_final)
+        segment = _transcribe_chunk_to_segment(
+            temp_path, session_id, sequence, language_hint=language_hint, is_final=is_final
+        )
         state = await realtime_orchestrator.ingest_segment(segment)
         await ws_manager.broadcast(session_id, {"type": "state_update", "state": state.to_dict()})
         return {"success": True, "state": state.to_dict(), "segment": segment.to_dict()}
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(temp_path)
-        except OSError:
-            pass
 
 
 @app.post("/stream/finalize/{session_id}")
 async def finalize_stream(session_id: str):
     state = await realtime_orchestrator.finalize_session(session_id)
-    
+
     final_text = state.final_transcript or state.latest_partial_text
     if final_text.strip():
         entities = list(state.entities.values())
-        
+
         # Timeline service expects a dict for emotion: {"label": "..."}
-        emotion_label = state.sentiment_timeline[-1].get("label") if state.sentiment_timeline else "Neutral"
+        emotion_label = (
+            state.sentiment_timeline[-1].get("label") if state.sentiment_timeline else "Neutral"
+        )
         emotion_dict = {"label": emotion_label}
-        
-        risk = {"score": state.risk_score, "risk_level": "High" if state.risk_score >= 50 else "Moderate" if state.risk_score >= 20 else "Low"}
-        
+
+        risk = {
+            "score": state.risk_score,
+            "risk_level": (
+                "High"
+                if state.risk_score >= 50
+                else "Moderate" if state.risk_score >= 20 else "Low"
+            ),
+        }
+
         timeline = generate_timeline(final_text, entities, emotion_dict, risk)
-        
+
         record = {
             "transcript": final_text,
             "translated_transcript": final_text,
             "language": "🔴 Live Stream",
             "entities": entities,
-            "summary": state.rolling_summary or {"topic": state.current_topic, "intent": state.current_intent},
+            "summary": state.rolling_summary
+            or {"topic": state.current_topic, "intent": state.current_intent},
             "emotion": emotion_label,
             "risk": risk,
             "timeline": timeline,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         save_conversation(record)
-        
+
     await ws_manager.broadcast(session_id, {"type": "final_state", "state": state.to_dict()})
     return state.to_dict()
 
@@ -176,7 +193,7 @@ async def live_updates(websocket: WebSocket, session_id: str):
 
 
 @app.post("/upload_audio")
-async def upload_audio(file: UploadFile = File(...), language_hint: Optional[str] = Form(None)):
+async def upload_audio(file: UploadFile = File(...), language_hint: str | None = Form(None)):  # noqa: B008
 
     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
 
@@ -209,11 +226,11 @@ async def upload_audio(file: UploadFile = File(...), language_hint: Optional[str
         "emotion": emotion,
         "risk": risk,
         "timeline": timeline,
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     save_conversation(record)
-    
+
     # MongoDB injects a non-serializable ObjectId into the dict, so we cast it
     if "_id" in record:
         record["_id"] = str(record["_id"])
@@ -232,7 +249,7 @@ async def edit_conversation(request: Request):
     doc_id = body.get("_id")
     if not doc_id:
         return {"success": False, "error": "Missing _id field"}
-    
+
     success = update_conversation(doc_id, body)
     return {"success": success}
 
@@ -243,6 +260,6 @@ async def delete_conversation_endpoint(request: Request):
     doc_id = body.get("_id")
     if not doc_id:
         return {"success": False, "error": "Missing _id field"}
-    
+
     success = delete_conversation(doc_id)
     return {"success": success}

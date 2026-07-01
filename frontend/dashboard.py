@@ -1,12 +1,15 @@
+import os
+import time
+
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
-import requests
-import time
-import os
 from timeline_chart import create_timeline_chart
+
 from backend.config import GROQ_API_KEY
 
 API = os.getenv("API_URL", "http://127.0.0.1:8000")
+
 
 def fetch_with_retry(method, endpoint, retries=5, delay=3, **kwargs):
     """Attempt an HTTP request multiple times if connection fails (e.g. backend still booting)."""
@@ -23,10 +26,13 @@ def fetch_with_retry(method, endpoint, retries=5, delay=3, **kwargs):
             else:
                 raise
 
+
 st.set_page_config(page_title="FinSense - Financial Conversations", layout="wide")
 
 st.title("FinSense – Financial Conversation Intelligence")
-st.markdown("Record or upload financial discussions to track decisions, extract insights, and assess risks.")
+st.markdown(
+    "Record or upload financial discussions to track decisions, extract insights, and assess risks."
+)
 
 if "result" not in st.session_state:
     st.session_state.result = None
@@ -35,14 +41,18 @@ tab1, tab2, tab3 = st.tabs(["Capture Conversation", "Conversation History", "Liv
 
 with tab1:
     if not GROQ_API_KEY:
-        st.warning("Capture Conversation requires a Groq API key. Live Streaming remains available without it.")
+        st.warning(
+            "Capture Conversation requires a Groq API key. Live Streaming remains available without it."
+        )
 
     col_upload, col_record = st.columns(2)
-    
+
     with col_upload:
         st.subheader("Upload Audio")
-        uploaded_file = st.file_uploader("Upload an existing audio file (.wav, .mp3)", type=["wav", "mp3"])
-        
+        uploaded_file = st.file_uploader(
+            "Upload an existing audio file (.wav, .mp3)", type=["wav", "mp3"]
+        )
+
     with col_record:
         st.subheader("Record Audio")
         audio_value = st.audio_input("Record a financial conversation directly")
@@ -62,31 +72,35 @@ with tab1:
         "Gujarati": "gu",
         "English": "en",
         "Tinglish (Telugu+English)": "te",
-        "Hinglish (Hindi+English)": "hi"
+        "Hinglish (Hindi+English)": "hi",
     }
     selected_lang = st.selectbox(
         "🌐 Select spoken language (improves accuracy for regional languages)",
         options=list(lang_options.keys()),
-        index=0
+        index=0,
     )
     lang_hint = lang_options[selected_lang]
 
-    if audio_to_process and st.button("Analyze Conversation", type="primary", disabled=not GROQ_API_KEY):
-        with st.spinner("Transcribing and extracting insights (this may take a minute as AI models load)..."):
+    if audio_to_process and st.button(
+        "Analyze Conversation", type="primary", disabled=not GROQ_API_KEY
+    ):
+        with st.spinner(
+            "Transcribing and extracting insights (this may take a minute as AI models load)..."
+        ):
             try:
                 filename = getattr(audio_to_process, "name", "recording.wav")
-                
+
                 # Send language hint alongside the audio file
                 form_data = {}
                 if lang_hint:
                     form_data["language_hint"] = (None, lang_hint)
-                    
+
                 response = fetch_with_retry(
-                    "POST", 
+                    "POST",
                     "/upload_audio",
                     retries=8,
                     delay=6,
-                    files={"file": (filename, audio_to_process.getvalue()), **form_data}
+                    files={"file": (filename, audio_to_process.getvalue()), **form_data},
                 )
                 if response.status_code == 200:
                     st.session_state.result = response.json()
@@ -102,34 +116,37 @@ with tab1:
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📜 Transcript")
-            
+
             st.markdown("**Native Audio Script:**")
             edited_native = st.text_area(
                 "Edit native transcript",
                 value=res.get("transcript", ""),
                 key=f"capture_native_{res.get('_id', 'temp')}",
                 height=120,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
-            
+
             st.markdown("**English Translation:**")
             edited_english = st.text_area(
                 "Edit English translation",
                 value=res.get("translated_transcript", ""),
                 key=f"capture_english_{res.get('_id', 'temp')}",
                 height=120,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
-            
+
             # Save edits button
             doc_id = res.get("_id")
             if doc_id and st.button("💾 Save Transcript Edits", key=f"save_capture_{doc_id}"):
                 try:
-                    save_resp = requests.post(f"{API}/edit_conversation", json={
-                        "_id": doc_id,
-                        "transcript": edited_native,
-                        "translated_transcript": edited_english
-                    })
+                    save_resp = requests.post(
+                        f"{API}/edit_conversation",
+                        json={
+                            "_id": doc_id,
+                            "transcript": edited_native,
+                            "translated_transcript": edited_english,
+                        },
+                    )
                     if save_resp.status_code == 200 and save_resp.json().get("success"):
                         st.success("Transcript edits saved!")
                         res["transcript"] = edited_native
@@ -138,7 +155,7 @@ with tab1:
                         st.error("Failed to save edits.")
                 except Exception as e:
                     st.error(f"Error saving: {e}")
-            
+
             st.markdown("**Captured Entities:**")
             entities = res.get("entities", [])
             formatted_entities = []
@@ -147,44 +164,44 @@ with tab1:
                 amount = e.get("amount", "") if isinstance(e, dict) else ""
                 formatted_entities.append(f"{keyword} ({amount})" if amount else keyword)
             st.warning(", ".join(formatted_entities) if formatted_entities else "None detected")
-            
+
             st.subheader("🏷️ Extracted Details")
             st.write("**Language:**", res.get("language", "Unknown"))
-            
+
         with col2:
             st.subheader("💡 AI Structured Insights")
             summary = res.get("summary", {})
-            
+
             if isinstance(summary, dict):
                 st.write(f"**Topic:** {summary.get('topic', 'N/A')}")
                 st.write(f"**Intent:** {summary.get('intent', 'N/A')}")
-                
-                decisions = summary.get('decisions', [])
+
+                decisions = summary.get("decisions", [])
                 if decisions:
                     st.write("**Decisions:**")
                     for d in decisions:
                         st.write(f"- {d}")
-                        
-                risks = summary.get('risks', [])
+
+                risks = summary.get("risks", [])
                 if risks:
                     st.write("**Identified Risks:**")
                     for r in risks:
                         st.error(f"- {r}")
             else:
                 st.success(summary)
-            
+
             st.subheader("📊 Quantitative Risk")
             st.write("**Emotion:**", res.get("emotion", "Neutral"))
             st.write("**Risk Score:**", str(res.get("risk", {}).get("score", "N/A")))
-            
+
 with tab2:
     st.subheader("Conversation History")
-    
+
     if st.button("Refresh History", type="primary"):
         try:
             with st.spinner("Fetching conversations from database..."):
                 response = fetch_with_retry("GET", "/history", retries=8, delay=6)
-            
+
             if response.status_code == 200:
                 st.session_state["history_data"] = response.json()
             else:
@@ -193,15 +210,15 @@ with tab2:
             st.error(f"Failed to connect to backend: {e}")
 
     data = st.session_state.get("history_data", [])
-    
+
     if data:
         timeline_data = []
-        
+
         for idx, conv in enumerate(data):
             doc_id = conv.get("_id", "")
             language = conv.get("language", "")
             timestamp = conv.get("created_at", "")
-            
+
             # ── Card container ──
             with st.container(border=True):
                 # Title row
@@ -210,25 +227,29 @@ with tab2:
                     meta_parts.append(language)
                 if timestamp:
                     meta_parts.append(timestamp)
-                st.caption(f"Conversation {idx + 1}  —  {' · '.join(meta_parts)}" if meta_parts else f"Conversation {idx + 1}")
-                
+                st.caption(
+                    f"Conversation {idx + 1}  —  {' · '.join(meta_parts)}"
+                    if meta_parts
+                    else f"Conversation {idx + 1}"
+                )
+
                 # Two-column layout: transcripts on left, insights on right
                 left, right = st.columns(2)
-                
+
                 with left:
                     edited_transcript = st.text_area(
                         "Native Transcript",
                         value=conv.get("transcript", ""),
                         key=f"transcript_{doc_id}",
-                        height=90
+                        height=90,
                     )
                     edited_translation = st.text_area(
                         "English Translation",
                         value=conv.get("translated_transcript", ""),
                         key=f"translation_{doc_id}",
-                        height=90
+                        height=90,
                     )
-                
+
                 with right:
                     # Entities
                     entities = conv.get("entities", [])
@@ -241,18 +262,20 @@ with tab2:
                         else:
                             ent_parts.append(str(e).title())
                     st.write(f"**Entities:** {', '.join(ent_parts) if ent_parts else 'None'}")
-                    
+
                     # Summary
                     summary = conv.get("summary", {})
                     if isinstance(summary, dict):
                         st.write(f"**Topic:** {summary.get('topic', 'N/A')}")
                         st.write(f"**Intent:** {summary.get('intent', 'N/A')}")
-                    
+
                     risk = conv.get("risk", {})
-                    risk_text = str(risk.get("risk_level", "Low")) if isinstance(risk, dict) else str(risk)
+                    risk_text = (
+                        str(risk.get("risk_level", "Low")) if isinstance(risk, dict) else str(risk)
+                    )
                     st.write(f"**Risk:** {risk_text}")
                     st.write(f"**Emotion:** {conv.get('emotion', 'Neutral')}")
-                
+
                 # Action buttons
                 save_col, del_col, spacer = st.columns([1, 1, 4])
                 with save_col:
@@ -261,7 +284,7 @@ with tab2:
                             payload = {
                                 "_id": doc_id,
                                 "transcript": edited_transcript,
-                                "translated_transcript": edited_translation
+                                "translated_transcript": edited_translation,
                             }
                             try:
                                 save_resp = requests.post(f"{API}/edit_conversation", json=payload)
@@ -271,12 +294,14 @@ with tab2:
                                     st.error("Failed to save.")
                             except Exception as e:
                                 st.error(f"Error: {e}")
-                
+
                 with del_col:
                     if st.button("Delete", key=f"del_{doc_id}"):
                         if doc_id:
                             try:
-                                del_resp = requests.post(f"{API}/delete_conversation", json={"_id": doc_id})
+                                del_resp = requests.post(
+                                    f"{API}/delete_conversation", json={"_id": doc_id}
+                                )
                                 if del_resp.status_code == 200 and del_resp.json().get("success"):
                                     st.session_state["history_data"].pop(idx)
                                     st.rerun()
@@ -284,10 +309,10 @@ with tab2:
                                     st.error("Failed to delete.")
                             except Exception as e:
                                 st.error(f"Error: {e}")
-            
+
             if "timeline" in conv:
                 timeline_data.append(conv["timeline"])
-        
+
         if timeline_data:
             st.subheader("Risk & Emotion Timeline")
             try:
@@ -301,7 +326,9 @@ with tab2:
 
 with tab3:
     st.subheader("Live Streaming Session")
-    st.caption("Start a session, record from your browser, and watch transcript and insight updates arrive in real time.")
+    st.caption(
+        "Start a session, record from your browser, and watch transcript and insight updates arrive in real time."
+    )
 
     live_html = f"""
         <style>
