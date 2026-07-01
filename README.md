@@ -17,21 +17,16 @@ The product stores conversation records in MongoDB, exposes a FastAPI backend, a
 - Cloud-ready Docker deployment with Redis-backed state support.
 
 ## System Architecture
-```mermaid
-flowchart LR
-  A[Streamlit Dashboard] --> B[FastAPI Backend]
-  B --> C[Capture Conversation]
-  B --> D[Live Streaming]
-  C --> E["Groq API (Whisper-Large-V3)"]
-  D --> E
-  E --> G[Batch NLP Services]
-  E --> H[Incremental Realtime Orchestrator]
-  G --> I[MongoDB]
-  H --> J[Redis / In-Memory State]
-  H --> I
-  H --> K[WebSocket Live Updates]
-  K --> A
-```
+The application is built around a high-performance data pipeline spanning the frontend, backend, and external AI services:
+
+- **1. User Interface (Streamlit)**: Serves as the presentation layer. Captures browser-based microphone audio or batch file uploads.
+- **2. API Gateway (FastAPI)**: Routes incoming audio chunks and batch files to the appropriate transcription services.
+- **3. AI Transcription (Groq API)**: Processes both batch uploads and live streaming audio using `Whisper-Large-V3` for near-instant speech-to-text.
+- **4. Orchestration & NLP**: 
+  - *Live Sessions*: Uses the Incremental Realtime Orchestrator to parse incoming transcripts on the fly.
+  - *Offline Sessions*: Passes transcripts to Batch NLP Services for summarization and entity extraction.
+- **5. State & Persistence**: Uses Redis (or in-memory) for real-time state management, and persists all finalized conversation records to MongoDB.
+- **6. Real-time Feedback**: Streams live topic, intent, and risk analysis back to the dashboard via WebSockets.
 
 ## Technology Stack
 - Frontend: Streamlit (Premium UI theme)
