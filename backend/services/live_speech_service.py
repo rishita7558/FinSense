@@ -1,9 +1,7 @@
 import os
 import re
-
 from groq import Groq
-
-from backend.config import GROQ_API_KEY
+from backend.config import GROQ_API_KEY, STT_LANGUAGE
 
 LANG_MAP = {
     "te": "Telugu", "ta": "Tamil", "kn": "Kannada", "ml": "Malayalam",
@@ -22,19 +20,24 @@ def _detect_code_mixed(native_text, detected_language):
         return code_mix_label.get(detected_language, f"{detected_language}-English Mix")
     return detected_language
 
+def _normalize_language_code(language_hint):
+    if language_hint:
+        return language_hint
+    return STT_LANGUAGE or None
 
 def transcribe_audio(audio_path, language_hint=None):
     if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY is missing from .env! Capture Conversation requires Groq.")
+        raise ValueError("GROQ_API_KEY is missing from .env! Live Streaming requires Groq.")
 
     client = Groq(api_key=GROQ_API_KEY)
+    language_code = _normalize_language_code(language_hint)
 
     whisper_params = {
         "model": "whisper-large-v3",
         "response_format": "verbose_json"
     }
-    if language_hint:
-        whisper_params["language"] = language_hint
+    if language_code:
+        whisper_params["language"] = language_code
 
     with open(audio_path, "rb") as file_obj:
         native_result = client.audio.transcriptions.create(
@@ -43,21 +46,19 @@ def transcribe_audio(audio_path, language_hint=None):
         )
 
     native_text = native_result.text.strip()
-    whisper_lang_code = language_hint or getattr(native_result, "language", None)
+    whisper_lang_code = language_code or getattr(native_result, "language", None)
     detected_language = LANG_MAP.get(whisper_lang_code, whisper_lang_code or "Unknown")
     detected_language = _detect_code_mixed(native_text, detected_language)
 
-    if detected_language == "English":
+    if detected_language == "English" or not native_text:
         english_text = native_text
     else:
+        # Use fast versatile model for translation
         translation_prompt = f"""Translate the following {detected_language} text into natural, fluent English.
-This is a financial conversation about topics like SIP, EMI, loans, mutual funds, and investments.
-Preserve all financial terms, numbers, and proper nouns exactly as spoken.
+This is a financial conversation. Preserve all financial terms, numbers, and proper nouns.
 Return ONLY the English translation, nothing else.
 
-Text to translate:
-{native_text}"""
-
+Text: {native_text}"""
         translation_response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": translation_prompt}],

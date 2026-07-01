@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 openai-whisper
+groq
 transformers
 spacy
 pandas
@@ -16,3 +17,6 @@ plotly
 sounddevice
 scipy
 openai
+redis
+webrtcvad
+websockets

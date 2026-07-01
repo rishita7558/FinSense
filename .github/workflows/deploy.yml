@@ -1,0 +1,104 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and Push Image
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Set image name
+        id: image
+        run: echo "image=ghcr.io/${{ github.repository_owner }}/finsense:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push image
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/finsense:latest"
+          SHA_IMAGE="ghcr.io/${{ github.repository_owner }}/finsense:${{ github.event.workflow_run.head_sha }}"
+          docker build -t "$IMAGE" -t "$SHA_IMAGE" .
+          docker push "$IMAGE"
+          docker push "$SHA_IMAGE"
+
+  deploy:
+    name: Deploy to Production Server
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s' "$PROD_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${PROD_SSH_PORT:-22}" "$PROD_SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy deployment assets
+        env:
+          PROD_SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+        run: |
+          DEPLOY_DIR="${PROD_DEPLOY_PATH:-/opt/finsense}"
+          ssh -i ~/.ssh/id_rsa -p "${PROD_SSH_PORT:-22}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "mkdir -p '$DEPLOY_DIR/scripts' '$DEPLOY_DIR/deploy'"
+          scp -i ~/.ssh/id_rsa -P "${PROD_SSH_PORT:-22}" deploy/docker-compose.prod.yml "${PROD_SSH_USER}@${PROD_SSH_HOST}:$DEPLOY_DIR/deploy/docker-compose.prod.yml"
+          scp -i ~/.ssh/id_rsa -P "${PROD_SSH_PORT:-22}" scripts/deploy.sh "${PROD_SSH_USER}@${PROD_SSH_HOST}:$DEPLOY_DIR/scripts/deploy.sh"
+          scp -i ~/.ssh/id_rsa -P "${PROD_SSH_PORT:-22}" scripts/verify_deployment.sh "${PROD_SSH_USER}@${PROD_SSH_HOST}:$DEPLOY_DIR/scripts/verify_deployment.sh"
+
+      - name: Deploy latest release
+        env:
+          PROD_SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          DEPLOY_DIR="${PROD_DEPLOY_PATH:-/opt/finsense}"
+          ssh -i ~/.ssh/id_rsa -p "${PROD_SSH_PORT:-22}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" <<EOF
+          set -euo pipefail
+          export GHCR_IMAGE=ghcr.io/${{ github.repository_owner }}/finsense:latest
+          export GHCR_USERNAME='${GHCR_USERNAME}'
+          export GHCR_TOKEN='${GHCR_TOKEN}'
+          export GROQ_API_KEY='${GROQ_API_KEY}'
+          cd '$DEPLOY_DIR'
+          chmod +x scripts/deploy.sh scripts/verify_deployment.sh
+          ./scripts/deploy.sh
+EOF

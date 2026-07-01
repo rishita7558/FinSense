@@ -1,7 +1,6 @@
 import spacy
 from spacy.matcher import PhraseMatcher
 import spacy.cli
-import json
 
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -90,49 +89,6 @@ patterns = [nlp.make_doc(text) for text in financial_keywords]
 matcher.add("FINANCIAL_TERMS", patterns)
 
 
-def _llm_extract_entities(text):
-    """Use Groq LLaMa-3 to extract financial entities the keyword matcher might miss."""
-    try:
-        from groq import Groq
-        from backend.config import GROQ_API_KEY
-        
-        if not GROQ_API_KEY:
-            return []
-        
-        client = Groq(api_key=GROQ_API_KEY)
-        
-        prompt = f"""Extract all financial entities from this text.
-Look for: loan types, EMI amounts, SIP amounts, mutual funds, insurance policies,
-interest rates, investment amounts, bank names, financial products, tax mentions,
-credit scores, account types, and all monetary values.
-
-Text: {text}
-
-Return ONLY a valid JSON object with an "entities" key containing an array:
-{{"entities": [{{"entity": "sip", "amount": "5000"}}, {{"entity": "home loan", "amount": "50 lakh"}}]}}
-If no amount is mentioned for an entity, omit the "amount" field.
-If no financial entities found, return: {{"entities": []}}"""
-
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.1
-        )
-        
-        result = json.loads(response.choices[0].message.content)
-        
-        if isinstance(result, list):
-            return result
-        elif isinstance(result, dict):
-            for key in result:
-                if isinstance(result[key], list):
-                    return result[key]
-        return []
-    except Exception:
-        return []
-
-
 def extract_financial_entities(text):
     doc = nlp(text)
     matches = matcher(doc)
@@ -170,20 +126,5 @@ def extract_financial_entities(text):
             entity_record["amount"] = associated_amount
             
         detected.append(entity_record)
-
-    # ──────────────────────────────────────────────────────────
-    # LLM SUPPLEMENT: Always run LLM to catch entities SpaCy
-    # might miss due to phrasing, context, or synonyms.
-    # Merge results, avoiding duplicates.
-    # ──────────────────────────────────────────────────────────
-    llm_entities = _llm_extract_entities(text)
-    
-    for llm_ent in llm_entities:
-        if not isinstance(llm_ent, dict):
-            continue
-        llm_keyword = llm_ent.get("entity", "").lower().strip()
-        if llm_keyword and llm_keyword not in seen_keywords:
-            seen_keywords.add(llm_keyword)
-            detected.append(llm_ent)
 
     return detected
